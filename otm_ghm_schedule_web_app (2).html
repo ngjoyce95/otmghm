@@ -1,0 +1,1575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OTM GHM Schedule - Hospital Melaka</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React 18 and ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel Standalone for compiling JSX in any browser -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- FontAwesome Icons for universal cross-browser icon rendering -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @media print {
+      .print-hidden { display: none !important; }
+      body { background: white !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // Gestation period calculation helper
+    function calculatePOG(lmpDateStr, targetDateStr) {
+      if (!lmpDateStr) return 'N/A';
+      const lmp = new Date(lmpDateStr);
+      const target = targetDateStr ? new Date(targetDateStr) : new Date();
+      if (isNaN(lmp.getTime()) || isNaN(target.getTime())) return 'N/A';
+
+      const diffTime = target.getTime() - lmp.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 3600 * 24));
+      if (diffDays < 0) return 'Pre-conception';
+      const weeks = Math.floor(diffDays / 7);
+      const days = diffDays % 7;
+      return `${weeks}w + ${days}d`;
+    }
+
+    function formatDateDisplay(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    function getDayName(dateStr) {
+      if (!dateStr) return '';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      return DAYS_OF_WEEK[d.getDay()] || '';
+    }
+
+    // Auto calculate age from Malaysian IC number
+    function estimateAgeFromIC(icStr) {
+      if (!icStr || typeof icStr !== 'string') return '';
+      const clean = icStr.replace(/\D/g, '');
+      if (clean.length < 6) return '';
+      const yearPrefix = parseInt(clean.substring(0, 2), 10);
+      if (isNaN(yearPrefix)) return '';
+      const currentYear = 2026;
+      const fullYear = yearPrefix <= 26 ? 2000 + yearPrefix : 1900 + yearPrefix;
+      const age = currentYear - fullYear;
+      return age > 0 && age < 110 ? `${age} yrs` : '';
+    }
+
+    const REGISTERED_USERS = [
+      { username: 'master', password: 'master123', name: 'Dr. Nor Azman (O&G Specialist)', role: 'master' },
+      { username: 'dr_sarah', password: 'doctor123', name: 'Dr. Sarah (Medical Officer)', role: 'doctor' },
+      { username: 'doctor', password: 'doctor123', name: 'Dr. Sarah (Medical Officer)', role: 'doctor' }
+    ];
+
+    const INITIAL_PATIENTS = [
+      {
+        id: 'p1',
+        opDate: '2026-10-15',
+        hospital: 'OTM',
+        name: 'Norazlina Binti Ahmad',
+        icNumber: '920815-10-5432',
+        age: '34 yrs',
+        ward: 'Ward 2B',
+        lmp: '2026-01-08',
+        edd: '2026-10-15',
+        pog: '40w + 0d',
+        parity: 'G2P1',
+        phone1: '+6012-3456789',
+        phone2: '+6019-8765432',
+        antenatalIssues: ['Gestational Diabetes (GDM)', 'Previous Scar x1'],
+        customAntenatalIssue: '',
+        opType: 'LSCS',
+        customOpType: '',
+        bloodRequirement: 'GXM 2 Pints PC Standby',
+        otRoom: 'OT Room 1',
+        slotTime: '08:30 AM',
+        anesthesia: 'Spinal Anesthesia',
+        urgency: 'Elective',
+        surgeon: 'Dr. Nor Azman (O&G Specialist)',
+        remarks: 'Standby 2 pints packed red blood cells.',
+        sequence: 1,
+        lastEditedBy: 'Dr. Nor Azman (O&G Specialist)',
+        lastEditedRole: 'master',
+        lastEditedAt: '09 Oct 2026, 09:15 AM'
+      },
+      {
+        id: 'p2',
+        opDate: '2026-10-15',
+        hospital: 'OTM',
+        name: 'Tan Mei Ling',
+        icNumber: '881120-14-6120',
+        age: '38 yrs',
+        ward: 'Ward 3A',
+        lmp: '2026-01-20',
+        edd: '2026-10-27',
+        pog: '38w + 2d',
+        parity: 'G3P2',
+        phone1: '+6016-9876543',
+        phone2: '+6012-1122334',
+        antenatalIssues: ['Pre-eclampsia (PIH)', 'Placenta Previa'],
+        customAntenatalIssue: '',
+        opType: 'LSCS KIV Hysterectomy',
+        customOpType: '',
+        bloodRequirement: 'GXM 4 Pints PC + 4 FFP Standby',
+        otRoom: 'OT Room 1',
+        slotTime: '11:00 AM',
+        anesthesia: 'General Anesthesia (GA)',
+        urgency: 'Elective',
+        surgeon: 'Dr. Nor Azman (O&G Specialist)',
+        remarks: 'High risk intraoperative bleeding.',
+        sequence: 2,
+        lastEditedBy: 'Dr. Sarah (Medical Officer)',
+        lastEditedRole: 'doctor',
+        lastEditedAt: '09 Oct 2026, 10:30 AM'
+      },
+      {
+        id: 'p3',
+        opDate: '2026-10-20',
+        hospital: 'GHM',
+        name: 'Saraswathy A/P Ramasamy',
+        icNumber: '950403-08-3322',
+        age: '31 yrs',
+        ward: 'Ward 2A',
+        lmp: '2026-01-12',
+        edd: '2026-10-19',
+        pog: '40w + 1d',
+        parity: 'G1P0',
+        phone1: '+6017-5544332',
+        phone2: '+6013-2211009',
+        antenatalIssues: ['Breech Presentation'],
+        customAntenatalIssue: '',
+        opType: 'LSCS+BTL',
+        customOpType: '',
+        bloodRequirement: 'GSH Standby',
+        otRoom: 'OT Room 2',
+        slotTime: '09:00 AM',
+        anesthesia: 'Spinal Anesthesia',
+        urgency: 'Elective',
+        surgeon: 'Dr. Sarah (Medical Officer)',
+        remarks: 'BTL consent confirmed and counterchecked.',
+        sequence: 1,
+        lastEditedBy: 'Dr. Sarah (Medical Officer)',
+        lastEditedRole: 'doctor',
+        lastEditedAt: '09 Oct 2026, 11:00 AM'
+      }
+    ];
+
+    const INITIAL_BLOCKED_DATES = [
+      { date: '2026-10-18', hospital: 'OTM', reason: 'OT Scheduled Maintenance', blockedBy: 'Dr. Nor Azman (O&G Specialist)' },
+      { date: '2026-10-24', hospital: 'ALL', reason: 'Deep Cleaning & Sterilization', blockedBy: 'Dr. Nor Azman (O&G Specialist)' }
+    ];
+
+    // Official Jabatan O&G Hospital Melaka Circular Emblem Component
+    function HospitalMelakaLogo({ className = "w-10 h-10", customSrc = null, onUpload = null, title = "Jabatan O&G Hospital Melaka" }) {
+      // If user uploaded their exact image file, display the genuine photo
+      if (customSrc) {
+        return (
+          <img
+            src={customSrc}
+            alt={title}
+            className={`${className} object-contain rounded-full shadow-xs cursor-pointer`}
+            onClick={onUpload}
+            title="Click to change or replace logo image"
+          />
+        );
+      }
+
+      return (
+        <svg
+          viewBox="0 0 300 300"
+          className={`${className} cursor-pointer select-none`}
+          xmlns="http://www.w3.org/2000/svg"
+          onClick={onUpload}
+          title="Click to upload your exact JPEG/PNG logo"
+        >
+          <defs>
+            {/* Top Text Arc: JABATAN O&G */}
+            <path id="topTextArc" d="M 40 150 A 110 110 0 0 1 260 150" fill="none" />
+            {/* Bottom Text Arc: HOSPITAL MELAKA */}
+            <path id="bottomTextArc" d="M 262 150 A 112 112 0 0 1 38 150" fill="none" />
+          </defs>
+
+          {/* Outer Border & Dark Purple Ring */}
+          <circle cx="150" cy="150" r="147" fill="#6f508a" stroke="#23172c" strokeWidth="5.5" />
+
+          {/* Horizontal Pink Ribbon (OBST / GYNAE) */}
+          <rect x="2" y="125" width="296" height="50" fill="#ff58a6" stroke="#23172c" strokeWidth="4" />
+          <text x="24" y="158" fill="#ffffff" fontFamily="'Arial Black', Impact, sans-serif" fontWeight="900" fontSize="22" letterSpacing="1.5">OBST</text>
+          <text x="206" y="158" fill="#ffffff" fontFamily="'Arial Black', Impact, sans-serif" fontWeight="900" fontSize="20" letterSpacing="1.5">GYNAE</text>
+
+          {/* Upper Text: JABATAN O&G */}
+          <text fill="#fff6d2" fontFamily="'Arial Black', Impact, sans-serif" fontWeight="900" fontSize="28" letterSpacing="2">
+            <textPath href="#topTextArc" startOffset="50%" textAnchor="middle">
+              JABATAN O&amp;G
+            </textPath>
+          </text>
+
+          {/* Lower Text: HOSPITAL MELAKA */}
+          <text fill="#fff6d2" fontFamily="'Arial Black', Impact, sans-serif" fontWeight="900" fontSize="22.5" letterSpacing="1.5">
+            <textPath href="#bottomTextArc" startOffset="50%" textAnchor="middle">
+              HOSPITAL MELAKA
+            </textPath>
+          </text>
+
+          {/* Inner White Circle Shield */}
+          <circle cx="150" cy="150" r="90" fill="#ffffff" stroke="#23172c" strokeWidth="5" />
+
+          {/* Left Ovary & Fallopian Tube */}
+          <circle cx="85" cy="138" r="13.5" fill="#ff58a6" />
+          {/* Right Ovary & Fallopian Tube */}
+          <circle cx="215" cy="138" r="13.5" fill="#ff58a6" />
+
+          {/* Uterus & Fallopian Tube Outer Contour */}
+          <path
+            d="M 85 138 C 76 112 110 98 136 103 C 144 105 150 109 150 109 C 150 109 156 105 164 103 C 190 98 224 112 215 138 C 210 152 196 156 182 144 C 172 136 172 124 158 122 C 166 142 168 168 158 190 C 152 203 150 216 150 220 C 150 216 148 203 142 190 C 132 168 134 142 142 122 C 128 124 128 136 118 144 C 104 156 90 152 85 138 Z"
+            fill="none"
+            stroke="#ff58a6"
+            strokeWidth="5.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Pregnant Mother Silhouette (facing right) */}
+          <g fill="#ff58a6">
+            {/* Mother's Head with downward gaze */}
+            <circle cx="147" cy="133" r="7.5" />
+            {/* Flowing hair, face profile, and neck */}
+            <path d="M 144 126 C 140 128 137 132 137 137 C 137 144 140 152 143 158 C 141 154 139 146 141 140 C 142 136 146 132 149 130 Z" />
+            {/* Upper body, bust, maternal back, and pregnant belly */}
+            <path d="M 148 139 C 145 142 143 147 142 153 C 140 158 138 165 136 172 C 134 179 133 186 135 193 C 137 200 142 208 147 213 C 149 215 151 214 150 211 C 146 206 142 198 141 188 C 140 178 143 169 147 161 C 149 157 152 152 155 149 C 157 147 158 144 155 142 C 152 140 150 139 148 139 Z" />
+            {/* Curved baby bump contour */}
+            <path d="M 147 156 C 154 158 162 165 163 174 C 164 183 158 193 151 199 C 156 193 159 184 158 175 C 157 167 151 161 147 156 Z" />
+          </g>
+
+          {/* Caduceus (Medical Staff with Serpents & Wings in Purple) */}
+          <g fill="#6f508a" stroke="#6f508a">
+            {/* Center Rod and top orb */}
+            <line x1="197" y1="130" x2="197" y2="190" strokeWidth="3" strokeLinecap="round" />
+            <circle cx="197" cy="127" r="3.5" />
+            {/* Wings */}
+            <path d="M 197 135 C 188 130 181 136 179 141 C 185 140 192 142 197 138 Z" />
+            <path d="M 197 135 C 206 130 213 136 215 141 C 209 140 202 142 197 138 Z" />
+            {/* Entwined Serpents */}
+            <path d="M 191 147 C 195 144 199 144 203 147 C 205 150 204 155 197 157 C 190 159 189 164 192 167 C 196 170 200 170 203 167 C 205 171 202 175 197 177 C 192 179 191 183 197 185" fill="none" strokeWidth="2.4" strokeLinecap="round" />
+          </g>
+        </svg>
+      );
+    }
+
+    function App() {
+      const [customLogo, setCustomLogo] = useState(() => {
+        try {
+          return localStorage.getItem('ot_custom_logo') || '';
+        } catch {
+          return '';
+        }
+      });
+
+      const [currentUser, setCurrentUser] = useState(() => {
+        try {
+          const saved = localStorage.getItem('ot_current_user');
+          return saved ? JSON.parse(saved) : null;
+        } catch {
+          return null;
+        }
+      });
+
+      const [loginUsername, setLoginUsername] = useState('');
+      const [loginPassword, setLoginPassword] = useState('');
+      const [loginError, setLoginError] = useState('');
+
+      const [patients, setPatients] = useState(() => {
+        try {
+          const saved = localStorage.getItem('ot_patients');
+          return saved ? JSON.parse(saved) : INITIAL_PATIENTS;
+        } catch {
+          return INITIAL_PATIENTS;
+        }
+      });
+
+      const [blockedDates, setBlockedDates] = useState(() => {
+        try {
+          const saved = localStorage.getItem('ot_blocked_dates');
+          return saved ? JSON.parse(saved) : INITIAL_BLOCKED_DATES;
+        } catch {
+          return INITIAL_BLOCKED_DATES;
+        }
+      });
+
+      const [auditLogs, setAuditLogs] = useState(() => {
+        try {
+          const saved = localStorage.getItem('ot_audit_logs');
+          return saved ? JSON.parse(saved) : [
+            {
+              id: 'log-1',
+              timestamp: '09 Oct 2026, 09:15 AM',
+              user: 'Dr. Nor Azman (O&G Specialist)',
+              role: 'master',
+              action: 'SCHEDULED_CASE',
+              details: 'Booked Norazlina Binti Ahmad for LSCS at OTM on 2026-10-15.'
+            }
+          ];
+        } catch {
+          return [];
+        }
+      });
+
+      const [currentYear, setCurrentYear] = useState(2026);
+      const [currentMonth, setCurrentMonth] = useState(9); // October
+      const [selectedDate, setSelectedDate] = useState('2026-10-15');
+      const [hospitalFilter, setHospitalFilter] = useState('ALL');
+
+      const [printSurgeonTeam, setPrintSurgeonTeam] = useState(() => {
+        try {
+          return localStorage.getItem('ot_print_surgeons') || 'Dr. Nor Azman (O&G Specialist) / Dr. Sarah (Medical Officer)';
+        } catch {
+          return 'Dr. Nor Azman (O&G Specialist) / Dr. Sarah (Medical Officer)';
+        }
+      });
+
+      const [activeTab, setActiveTab] = useState('calendar');
+      const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
+      const [isBlockModalOpen, setIsBlockModalOpen] = useState(false);
+      const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+      const [patientToDelete, setPatientToDelete] = useState(null);
+      const [editingPatient, setEditingPatient] = useState(null);
+
+      const [searchQuery, setSearchQuery] = useState('');
+      const [filterOpType, setFilterOpType] = useState('ALL');
+
+      const [blockReason, setBlockReason] = useState('OT Scheduled Maintenance');
+      const [blockHospital, setBlockHospital] = useState('OTM');
+      const [toast, setToast] = useState(null);
+
+      const handleExactLogoUpload = (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (uploadEvent) => {
+          const resultDataUrl = uploadEvent.target.result;
+          setCustomLogo(resultDataUrl);
+          try {
+            localStorage.setItem('ot_custom_logo', resultDataUrl);
+          } catch (err) {}
+          showToast('Jabatan O&G logo updated to your exact image file!', 'success');
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const triggerLogoFileInput = () => {
+        const input = document.getElementById('logoFileInput');
+        if (input) input.click();
+      };
+
+      const resetToDefaultLogo = (e) => {
+        e.stopPropagation();
+        setCustomLogo('');
+        try {
+          localStorage.removeItem('ot_custom_logo');
+        } catch (err) {}
+        showToast('Reset to default Jabatan O&G emblem.', 'info');
+      };
+
+      const initialPatientForm = {
+        hospital: 'OTM',
+        name: '',
+        icNumber: '',
+        age: '',
+        ward: 'Ward 2B',
+        lmp: '',
+        edd: '',
+        pog: '',
+        parity: 'G1P0',
+        phone1: '',
+        phone2: '',
+        antenatalIssues: ['Gestational Diabetes (GDM)'],
+        customAntenatalIssue: '',
+        opType: 'LSCS',
+        customOpType: '',
+        bloodRequirement: 'GSH Standby',
+        otRoom: 'OT Room 1',
+        slotTime: '08:30 AM',
+        anesthesia: 'Spinal Anesthesia',
+        urgency: 'Elective',
+        surgeon: 'Dr. Sarah (Medical Officer)',
+        remarks: ''
+      };
+
+      const [patientForm, setPatientForm] = useState(initialPatientForm);
+
+      useEffect(() => {
+        try { localStorage.setItem('ot_patients', JSON.stringify(patients)); } catch (e) {}
+      }, [patients]);
+
+      useEffect(() => {
+        try { localStorage.setItem('ot_blocked_dates', JSON.stringify(blockedDates)); } catch (e) {}
+      }, [blockedDates]);
+
+      useEffect(() => {
+        try { localStorage.setItem('ot_audit_logs', JSON.stringify(auditLogs)); } catch (e) {}
+      }, [auditLogs]);
+
+      useEffect(() => {
+        try { localStorage.setItem('ot_print_surgeons', printSurgeonTeam); } catch (e) {}
+      }, [printSurgeonTeam]);
+
+      useEffect(() => {
+        try {
+          if (currentUser) localStorage.setItem('ot_current_user', JSON.stringify(currentUser));
+          else localStorage.removeItem('ot_current_user');
+        } catch (e) {}
+      }, [currentUser]);
+
+      const showToast = (message, type = 'info') => {
+        setToast({ message, type });
+        setTimeout(() => setToast(null), 3500);
+      };
+
+      const recordAuditLog = (action, patientName, date, details) => {
+        const timeNow = new Date().toLocaleString('en-GB', {
+          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+        const newLog = {
+          id: 'log-' + Date.now(),
+          timestamp: timeNow,
+          user: currentUser ? currentUser.name : 'System',
+          role: currentUser ? currentUser.role : 'unknown',
+          action,
+          details: `${details} (Patient: ${patientName || 'N/A'}, Date: ${date})`
+        };
+        setAuditLogs(prev => [newLog, ...prev]);
+      };
+
+      const handleLogin = (e) => {
+        e.preventDefault();
+        setLoginError('');
+        const matched = REGISTERED_USERS.find(
+          u => u.username.toLowerCase() === loginUsername.trim().toLowerCase() && u.password === loginPassword
+        );
+        if (matched) {
+          setCurrentUser(matched);
+          showToast(`Welcome back, ${matched.name}!`, 'success');
+        } else {
+          setLoginError('Invalid credentials. Only registered Master Admins or Doctors can enter.');
+        }
+      };
+
+      const handleQuickDemoLogin = (role) => {
+        if (role === 'master') {
+          setCurrentUser(REGISTERED_USERS[0]);
+          showToast('Signed in as Master Admin (Dr. Nor Azman).', 'success');
+        } else {
+          setCurrentUser(REGISTERED_USERS[1]);
+          showToast('Signed in as Doctor (Dr. Sarah).', 'success');
+        }
+      };
+
+      const handleLogout = () => {
+        setCurrentUser(null);
+        showToast('Signed out successfully.', 'info');
+      };
+
+      const isDateBlockedForHospital = (dateStr, hospital) => {
+        return blockedDates.find(b => b.date === dateStr && (b.hospital === 'ALL' || b.hospital === hospital));
+      };
+
+      const handleOpenAddPatientModal = (dateStr = null) => {
+        const targetDate = dateStr || selectedDate;
+        const targetHospital = hospitalFilter === 'ALL' ? 'OTM' : hospitalFilter;
+        const blockedCheck = isDateBlockedForHospital(targetDate, targetHospital);
+        if (blockedCheck) {
+          showToast(`Date ${targetDate} is locked (${blockedCheck.reason}). No patients can be scheduled while this date is locked. Please unlock the date first.`, 'warning');
+          return;
+        }
+        setEditingPatient(null);
+        setPatientForm({
+          ...initialPatientForm,
+          opDate: targetDate,
+          hospital: targetHospital,
+          surgeon: currentUser.name
+        });
+        setIsPatientModalOpen(true);
+      };
+
+      const handleOpenEditPatientModal = (patient) => {
+        setEditingPatient(patient);
+        setPatientForm({
+          ...patient,
+          age: patient.age || estimateAgeFromIC(patient.icNumber) || '',
+          ward: patient.ward || 'Ward 2B',
+          bloodRequirement: patient.bloodRequirement || 'GSH Standby',
+          customAntenatalIssue: patient.customAntenatalIssue || '',
+          customOpType: patient.customOpType || ''
+        });
+        setIsPatientModalOpen(true);
+      };
+
+      const handleSavePatient = (e) => {
+        e.preventDefault();
+        if (!patientForm.name.trim() || !patientForm.icNumber.trim()) {
+          showToast('Please enter Patient Name and IC/Passport Number.', 'warning');
+          return;
+        }
+
+        const opDateToSave = patientForm.opDate || selectedDate;
+        const blockedCheck = isDateBlockedForHospital(opDateToSave, patientForm.hospital);
+        
+        // Block adding new patients or moving existing patients onto a locked date
+        if (blockedCheck) {
+          if (!editingPatient || editingPatient.opDate !== opDateToSave || editingPatient.hospital !== patientForm.hospital) {
+            showToast(`Date ${opDateToSave} is locked for ${patientForm.hospital} (${blockedCheck.reason}). No patients can be added or rescheduled to this locked date.`, 'warning');
+            return;
+          }
+        }
+
+        const timeNow = new Date().toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+        let finalIssues = Array.isArray(patientForm.antenatalIssues) ? [...patientForm.antenatalIssues] : [];
+        if (patientForm.customAntenatalIssue && patientForm.customAntenatalIssue.trim()) {
+          if (!finalIssues.includes(patientForm.customAntenatalIssue.trim())) {
+            finalIssues.push(patientForm.customAntenatalIssue.trim());
+          }
+        }
+
+        const calculatedAge = patientForm.age?.trim() || estimateAgeFromIC(patientForm.icNumber) || '-';
+
+        const payload = {
+          ...patientForm,
+          age: calculatedAge,
+          antenatalIssues: finalIssues,
+          opDate: opDateToSave,
+          pog: calculatePOG(patientForm.lmp, opDateToSave),
+          lastEditedBy: currentUser.name,
+          lastEditedRole: currentUser.role,
+          lastEditedAt: timeNow
+        };
+
+        if (editingPatient) {
+          setPatients(prev => prev.map(p => (p.id === editingPatient.id ? { ...payload, id: editingPatient.id, sequence: p.sequence || 1 } : p)));
+          recordAuditLog('EDITED_PATIENT', payload.name, opDateToSave, `Updated details for ${payload.opType}.`);
+          showToast('Patient record updated!', 'success');
+        } else {
+          const existingCount = patients.filter(p => p.opDate === opDateToSave && p.hospital === payload.hospital).length;
+          const newPatient = { ...payload, id: 'p_' + Date.now(), sequence: existingCount + 1 };
+          setPatients(prev => [newPatient, ...prev]);
+          recordAuditLog('ADDED_PATIENT', payload.name, opDateToSave, `Booked ${payload.opType} at ${payload.hospital}.`);
+          showToast('New patient booked!', 'success');
+        }
+        setIsPatientModalOpen(false);
+      };
+
+      const confirmDeletePatient = () => {
+        if (!patientToDelete) return;
+        setPatients(prev => prev.filter(p => p.id !== patientToDelete.id));
+        recordAuditLog('DELETED_PATIENT', patientToDelete.name, patientToDelete.opDate, `Deleted ${patientToDelete.opType}.`);
+        showToast(`Patient removed successfully.`, 'info');
+        setIsDeleteConfirmOpen(false);
+        setPatientToDelete(null);
+      };
+
+      const handleToggleBlockDate = (e) => {
+        e.preventDefault();
+        if (currentUser.role !== 'master') {
+          showToast('Only Master Admin can lock or unlock dates.', 'warning');
+          return;
+        }
+        const existingIdx = blockedDates.findIndex(b => b.date === selectedDate && (b.hospital === blockHospital || b.hospital === 'ALL'));
+        if (existingIdx > -1) {
+          const removed = blockedDates[existingIdx];
+          setBlockedDates(prev => prev.filter((_, idx) => idx !== existingIdx));
+          recordAuditLog('UNBLOCKED_DATE', 'N/A', selectedDate, `Unlocked date for ${removed.hospital}.`);
+          showToast(`Date ${selectedDate} unlocked.`, 'success');
+        } else {
+          const newBlock = { date: selectedDate, hospital: blockHospital, reason: blockReason, blockedBy: currentUser.name };
+          setBlockedDates(prev => [...prev, newBlock]);
+          recordAuditLog('BLOCKED_DATE', 'N/A', selectedDate, `Locked date (${blockHospital}) Reason: ${blockReason}`);
+          showToast(`Date ${selectedDate} locked.`, 'warning');
+        }
+        setIsBlockModalOpen(false);
+      };
+
+      const movePatientSequence = (patientId, direction) => {
+        const dayCases = patients
+          .filter(p => p.opDate === selectedDate && (hospitalFilter === 'ALL' || p.hospital === hospitalFilter))
+          .sort((a, b) => (a.sequence || 1) - (b.sequence || 1));
+
+        const index = dayCases.findIndex(p => p.id === patientId);
+        if (index === -1) return;
+
+        if (direction === 'up' && index > 0) {
+          const tempSeq = dayCases[index].sequence || index + 1;
+          const targetSeq = dayCases[index - 1].sequence || index;
+          dayCases[index].sequence = targetSeq;
+          dayCases[index - 1].sequence = tempSeq;
+        } else if (direction === 'down' && index < dayCases.length - 1) {
+          const tempSeq = dayCases[index].sequence || index + 1;
+          const targetSeq = dayCases[index + 1].sequence || index + 2;
+          dayCases[index].sequence = targetSeq;
+          dayCases[index + 1].sequence = tempSeq;
+        }
+
+        setPatients(prev => {
+          const updatedMap = new Map(dayCases.map(item => [item.id, item.sequence]));
+          return prev.map(p => (updatedMap.has(p.id) ? { ...p, sequence: updatedMap.get(p.id) } : p));
+        });
+        showToast('Operating sequence reordered.', 'info');
+      };
+
+      const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+
+      const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay();
+
+      const prevMonth = () => {
+        if (currentMonth === 0) { setCurrentMonth(11); setCurrentYear(y => y - 1); }
+        else { setCurrentMonth(m => m - 1); }
+      };
+
+      const nextMonth = () => {
+        if (currentMonth === 11) { setCurrentMonth(0); setCurrentYear(y => y + 1); }
+        else { setCurrentMonth(m => m + 1); }
+      };
+
+      const filteredPatients = useMemo(() => {
+        return patients.filter(p => {
+          const matchesHospital = hospitalFilter === 'ALL' || p.hospital === hospitalFilter;
+          const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p.icNumber.includes(searchQuery) ||
+            (p.surgeon && p.surgeon.toLowerCase().includes(searchQuery.toLowerCase()));
+          const matchesOp = filterOpType === 'ALL' || p.opType === filterOpType;
+          return matchesHospital && matchesSearch && matchesOp;
+        });
+      }, [patients, hospitalFilter, searchQuery, filterOpType]);
+
+      const selectedDatePatients = useMemo(() => {
+        return patients
+          .filter(p => p.opDate === selectedDate && (hospitalFilter === 'ALL' || p.hospital === hospitalFilter))
+          .sort((a, b) => (a.sequence || 1) - (b.sequence || 1));
+      }, [patients, selectedDate, hospitalFilter]);
+
+      const isCurrentSelectedDateBlocked = useMemo(() => {
+        return isDateBlockedForHospital(selectedDate, hospitalFilter === 'ALL' ? 'OTM' : hospitalFilter);
+      }, [selectedDate, blockedDates, hospitalFilter]);
+
+      if (!currentUser) {
+        return (
+          <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+            {/* Hidden file input for uploading the exact logo image */}
+            <input
+              type="file"
+              id="logoFileInput"
+              accept="image/*"
+              className="hidden"
+              onChange={handleExactLogoUpload}
+            />
+
+            <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 space-y-6">
+              <div className="text-center space-y-2">
+                <div className="w-24 h-24 mx-auto flex items-center justify-center drop-shadow-lg relative group">
+                  <HospitalMelakaLogo
+                    className="w-full h-full"
+                    customSrc={customLogo}
+                    onUpload={triggerLogoFileInput}
+                  />
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={triggerLogoFileInput}
+                    className="text-[11px] font-bold text-teal-700 hover:text-teal-900 underline cursor-pointer"
+                  >
+                    <i className="fa-solid fa-camera mr-1"></i>
+                    {customLogo ? 'Replace Logo Image' : 'Upload Exact Logo Image'}
+                  </button>
+                  {customLogo && (
+                    <button
+                      type="button"
+                      onClick={resetToDefaultLogo}
+                      className="text-[11px] font-semibold text-slate-400 hover:text-rose-600 cursor-pointer"
+                    >
+                      (Reset)
+                    </button>
+                  )}
+                </div>
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight">OTM GHM Schedule</h1>
+                <p className="text-xs text-slate-500 font-medium">Obstetrics &amp; Gynaecology OT Scheduling Portal</p>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-purple-900 border border-purple-200">
+                  <i className="fa-solid fa-hospital text-xs text-purple-700"></i>
+                  <span>Jabatan O&amp;G Hospital Melaka</span>
+                </div>
+              </div>
+
+              {loginError && (
+                <div className="p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                  <i className="fa-solid fa-circle-exclamation text-rose-500"></i>
+                  <span>{loginError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Username / ID</label>
+                  <input
+                    type="text"
+                    value={loginUsername}
+                    onChange={(e) => setLoginUsername(e.target.value)}
+                    placeholder="e.g. master or dr_sarah"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Password</label>
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs focus:ring-2 focus:ring-teal-500 focus:outline-none"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-3 px-4 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-extrabold text-xs tracking-wider uppercase shadow-lg shadow-teal-600/20 transition cursor-pointer"
+                >
+                  Sign In to Schedule Portal
+                </button>
+              </form>
+
+              <div className="pt-4 border-t border-slate-100 text-center space-y-3">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Quick Switch Demo Roles</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemoLogin('master')}
+                    className="p-2.5 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-900 text-xs font-bold flex flex-col items-center gap-1 transition cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1">
+                      <i className="fa-solid fa-user-shield text-teal-700"></i>
+                      <span>Master Admin</span>
+                    </span>
+                    <span className="text-[10px] text-teal-700 font-normal">Dr. Nor Azman (Specialist)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleQuickDemoLogin('doctor')}
+                    className="p-2.5 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 text-xs font-bold flex flex-col items-center gap-1 transition cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1">
+                      <i className="fa-solid fa-user-doctor text-indigo-700"></i>
+                      <span>Doctor</span>
+                    </span>
+                    <span className="text-[10px] text-indigo-700 font-normal">Dr. Sarah (MO)</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen flex flex-col">
+          {/* Toast Notification */}
+          {toast && (
+            <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-2xl shadow-xl border text-xs font-bold bg-white border-slate-200 text-slate-900">
+              <i className={`fa-solid ${toast.type === 'success' ? 'fa-circle-check text-emerald-500' : toast.type === 'warning' ? 'fa-triangle-exclamation text-amber-500' : 'fa-circle-info text-teal-500'}`}></i>
+              <span>{toast.message}</span>
+            </div>
+          )}
+
+          {/* Top Header */}
+          <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm print-hidden">
+            {/* Hidden file input for uploading the exact logo image */}
+            <input
+              type="file"
+              id="logoFileInput"
+              accept="image/*"
+              className="hidden"
+              onChange={handleExactLogoUpload}
+            />
+
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+              <div className="flex items-center space-x-3">
+                <div
+                  className="w-11 h-11 flex-shrink-0 flex items-center justify-center drop-shadow-sm cursor-pointer relative"
+                  onClick={triggerLogoFileInput}
+                  title="Click to use your exact logo image file"
+                >
+                  <HospitalMelakaLogo
+                    className="w-full h-full"
+                    customSrc={customLogo}
+                    onUpload={triggerLogoFileInput}
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h1 className="text-base font-black text-slate-900 tracking-tight">OTM GHM Schedule</h1>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-purple-100 text-purple-900 border border-purple-200">Hospital Melaka</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium">Department of Obstetrics &amp; Gynaecology</p>
+                </div>
+              </div>
+
+              {/* Account Info & Logout */}
+              <div className="flex items-center space-x-3">
+                <div className="hidden md:flex items-center gap-2 text-xs">
+                  <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold">
+                    <i className={`fa-solid ${currentUser.role === 'master' ? 'fa-user-shield text-teal-700' : 'fa-user-doctor text-indigo-700'}`}></i>
+                  </div>
+                  <div>
+                    <p className="font-extrabold text-slate-900 leading-tight">{currentUser.name}</p>
+                    <p className="text-[10px] font-semibold text-slate-500 uppercase">{currentUser.role === 'master' ? 'Specialist / Master Admin' : 'Medical Officer (Doctor)'}</p>
+                  </div>
+                </div>
+
+                <button onClick={handleLogout} className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer" title="Sign Out">
+                  <i className="fa-solid fa-arrow-right-from-bracket"></i>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-6 print-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <button
+                  onClick={() => setActiveTab('calendar')}
+                  className={`px-4 py-2 rounded-2xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${activeTab === 'calendar' ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-700 hover:bg-slate-200'}`}
+                >
+                  <i className="fa-solid fa-calendar-days"></i>
+                  <span>OT Calendar</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('patients')}
+                  className={`px-4 py-2 rounded-2xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${activeTab === 'patients' ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-700 hover:bg-slate-200'}`}
+                >
+                  <i className="fa-solid fa-users"></i>
+                  <span>Patient Directory ({filteredPatients.length})</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('print')}
+                  className={`px-4 py-2 rounded-2xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${activeTab === 'print' ? 'bg-teal-700 text-white shadow-md' : 'bg-white text-slate-700 hover:bg-slate-200'}`}
+                >
+                  <i className="fa-solid fa-print"></i>
+                  <span>Official Print Schedule</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('audit')}
+                  className={`px-4 py-2 rounded-2xl text-xs font-bold flex items-center gap-2 transition cursor-pointer ${activeTab === 'audit' ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-700 hover:bg-slate-200'}`}
+                >
+                  <i className="fa-solid fa-clock-rotate-left"></i>
+                  <span>Audit Trail</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {currentUser.role === 'master' && (
+                  <button
+                    onClick={() => setIsBlockModalOpen(true)}
+                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                  >
+                    <i className="fa-solid fa-lock"></i>
+                    <span>Lock Date (Master)</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => handleOpenAddPatientModal()}
+                  className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-teal-600/20 transition cursor-pointer"
+                >
+                  <i className="fa-solid fa-plus"></i>
+                  <span>Add Patient</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex-1">
+            {activeTab === 'calendar' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Calendar Grid */}
+                <div className="lg:col-span-8 bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-200 space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold text-sm">
+                        {currentMonth + 1}
+                      </div>
+                      <div>
+                        <h2 className="text-base sm:text-lg font-black text-slate-900">{monthNames[currentMonth]} {currentYear}</h2>
+                        <p className="text-[11px] text-slate-500">Elective Operation Theatre Calendar View — OTM & GHM</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-1.5">
+                      <button onClick={prevMonth} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
+                        <i className="fa-solid fa-chevron-left text-xs"></i>
+                      </button>
+                      <button onClick={() => { setCurrentMonth(9); setCurrentYear(2026); }} className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 cursor-pointer">
+                        Oct '26
+                      </button>
+                      <button onClick={nextMonth} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
+                        <i className="fa-solid fa-chevron-right text-xs"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold uppercase text-slate-500 py-1">
+                    <div className="text-rose-500">Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div className="text-rose-500">Sat</div>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                    {Array.from({ length: firstDayOfMonth }).map((_, i) => (
+                      <div key={`empty-${i}`} className="min-h-[75px] sm:min-h-[85px] bg-slate-50/40 rounded-2xl border border-dashed border-slate-200/60 opacity-30" />
+                    ))}
+                    {Array.from({ length: daysInCurrentMonth }).map((_, i) => {
+                      const dayNum = i + 1;
+                      const dateString = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                      const isSelected = selectedDate === dateString;
+                      const dayCases = patients.filter(p => p.opDate === dateString && (hospitalFilter === 'ALL' || p.hospital === hospitalFilter));
+                      const isBlocked = isDateBlockedForHospital(dateString, hospitalFilter === 'ALL' ? 'OTM' : hospitalFilter);
+
+                      return (
+                        <div
+                          key={dateString}
+                          onClick={() => setSelectedDate(dateString)}
+                          className={`min-h-[75px] sm:min-h-[85px] p-2 rounded-2xl border transition flex flex-col justify-between cursor-pointer select-none relative ${
+                            isSelected ? 'border-teal-600 bg-teal-50/50 ring-2 ring-teal-500/30' : isBlocked ? 'bg-rose-50/70 border-rose-200' : 'bg-white border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs font-extrabold ${isSelected ? 'text-teal-900' : 'text-slate-800'}`}>{dayNum}</span>
+                            {isBlocked && <span title={`Locked: ${isBlocked.reason}`} className="text-[10px] text-rose-600"><i className="fa-solid fa-lock"></i></span>}
+                          </div>
+                          <div className="space-y-1 my-1">
+                            {dayCases.slice(0, 2).map(c => (
+                              <div key={c.id} className={`text-[9px] font-bold px-1.5 py-0.5 rounded truncate ${c.hospital === 'OTM' ? 'bg-teal-100 text-teal-900' : 'bg-indigo-100 text-indigo-900'}`}>
+                                {c.name.split(' ')[0]} • {c.opType}
+                              </div>
+                            ))}
+                            {dayCases.length > 2 && <div className="text-[8px] font-extrabold text-slate-500">+{dayCases.length - 2} more</div>}
+                          </div>
+                          <div className="text-[9px] font-semibold text-slate-400">
+                            {dayCases.length > 0 ? `${dayCases.length} ${dayCases.length === 1 ? 'case' : 'cases'}` : ''}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="lg:col-span-4 space-y-4">
+                  <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
+                          {getDayName(selectedDate)}
+                        </span>
+                        <h3 className="text-lg font-black text-slate-900 mt-1">{formatDateDisplay(selectedDate)}</h3>
+                      </div>
+                      <button
+                        onClick={() => handleOpenAddPatientModal(selectedDate)}
+                        className="p-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <i className="fa-solid fa-plus text-xs"></i>
+                        <span>Add</span>
+                      </button>
+                    </div>
+
+                    {isCurrentSelectedDateBlocked && (
+                      <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                        <i className="fa-solid fa-lock text-amber-600 mt-0.5"></i>
+                        <div>
+                          <span className="font-bold block">Date Locked / Blocked</span>
+                          <p className="text-[11px] text-amber-800">{isCurrentSelectedDateBlocked.reason} ({isCurrentSelectedDateBlocked.hospital})</p>
+                          <p className="text-[10px] text-rose-700 font-extrabold mt-1">
+                            <i className="fa-solid fa-ban mr-1"></i>No patients can be scheduled on this locked date.
+                          </p>
+                          <p className="text-[10px] text-amber-700 mt-0.5">Locked By: {isCurrentSelectedDateBlocked.blockedBy}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-700">Surgical Schedule ({selectedDatePatients.length})</span>
+                        <button onClick={() => setActiveTab('print')} className="text-teal-700 hover:text-teal-900 font-bold flex items-center gap-1 cursor-pointer">
+                          <i className="fa-solid fa-print"></i>
+                          <span>Print Schedule</span>
+                        </button>
+                      </div>
+
+                      {selectedDatePatients.length === 0 ? (
+                        <div className="py-8 text-center text-slate-400 text-xs">
+                          No surgical cases scheduled on {formatDateDisplay(selectedDate)}.
+                        </div>
+                      ) : (
+                        <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+                          {selectedDatePatients.map((caseItem, idx) => (
+                            <div key={caseItem.id} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 hover:bg-white hover:border-teal-200 transition space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800">Case #{idx + 1}</span>
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${caseItem.hospital === 'OTM' ? 'bg-teal-100 text-teal-900' : 'bg-indigo-100 text-indigo-900'}`}>{caseItem.hospital}</span>
+                                    <span className="font-bold text-slate-900 text-xs">{caseItem.name}</span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 font-mono mt-0.5">IC: {caseItem.icNumber} • Age: {caseItem.age || estimateAgeFromIC(caseItem.icNumber) || '-'} • Ward: {caseItem.ward || '-'}</p>
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button onClick={() => handleOpenEditPatientModal(caseItem)} className="p-1 rounded text-slate-400 hover:text-teal-600 cursor-pointer" title="Edit">
+                                    <i className="fa-solid fa-pen-to-square text-xs"></i>
+                                  </button>
+                                  <button onClick={() => { setPatientToDelete(caseItem); setIsDeleteConfirmOpen(true); }} className="p-1 rounded text-slate-400 hover:text-rose-600 cursor-pointer" title="Delete">
+                                    <i className="fa-solid fa-trash-can text-xs"></i>
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="text-[11px] bg-white p-2 rounded-xl border border-slate-100 space-y-1">
+                                <div className="flex justify-between font-semibold text-slate-700">
+                                  <span>Procedure:</span>
+                                  <span className="font-extrabold text-teal-900">{caseItem.opType === 'Other' ? caseItem.customOpType : caseItem.opType}</span>
+                                </div>
+                                <div className="flex justify-between text-slate-600">
+                                  <span>Parity & POG:</span>
+                                  <span className="font-medium text-slate-900">{caseItem.parity} • {caseItem.pog || 'N/A'}</span>
+                                </div>
+                                <div className="flex justify-between text-slate-600">
+                                  <span>Blood Requirement:</span>
+                                  <span className="font-bold text-rose-700">{caseItem.bloodRequirement || 'GSH Standby'}</span>
+                                </div>
+                                <div className="flex justify-between text-slate-600">
+                                  <span>Case Booked By:</span>
+                                  <span className="font-medium text-slate-800">{caseItem.surgeon || 'N/A'}</span>
+                                </div>
+                              </div>
+                              {caseItem.lastEditedBy && (
+                                <p className="text-[9px] text-slate-400 italic">Edited by: {caseItem.lastEditedBy} ({caseItem.lastEditedAt})</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'patients' && (
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900">Surgical Patient Directory</h2>
+                    <p className="text-xs text-slate-500">All registered patients across OTM & GHM</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="relative">
+                      <i className="fa-solid fa-magnifying-glass text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 text-xs"></i>
+                      <input
+                        type="text"
+                        placeholder="Search name, IC, or doctor..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-teal-500 w-48 sm:w-64"
+                      />
+                    </div>
+                    <select
+                      value={filterOpType}
+                      onChange={(e) => setFilterOpType(e.target.value)}
+                      className="text-xs bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 font-semibold text-slate-700 focus:outline-none"
+                    >
+                      <option value="ALL">All Procedures</option>
+                      <option value="LSCS">LSCS</option>
+                      <option value="LSCS KIV Hysterectomy">LSCS KIV Hysterectomy</option>
+                      <option value="LSCS+BTL">LSCS+BTL</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    <button onClick={() => handleOpenAddPatientModal()} className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer">
+                      <i className="fa-solid fa-plus text-xs"></i>
+                      <span>Register Patient</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-extrabold uppercase text-[10px]">
+                        <th className="p-3">Hospital & Date</th>
+                        <th className="p-3">Name & IC No.</th>
+                        <th className="p-3">Age / Ward</th>
+                        <th className="p-3">Parity & POG</th>
+                        <th className="p-3">Procedure</th>
+                        <th className="p-3">Blood Requirement</th>
+                        <th className="p-3">Case Booked By</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredPatients.length === 0 ? (
+                        <tr><td colSpan="8" className="p-8 text-center text-slate-400">No patient records found.</td></tr>
+                      ) : (
+                        filteredPatients.map(pt => (
+                          <tr key={pt.id} className="hover:bg-slate-50 transition">
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${pt.hospital === 'OTM' ? 'bg-teal-100 text-teal-800' : 'bg-indigo-100 text-indigo-800'}`}>{pt.hospital}</span>
+                              <p className="font-bold text-slate-900 mt-1">{formatDateDisplay(pt.opDate)}</p>
+                            </td>
+                            <td className="p-3">
+                              <p className="font-extrabold text-slate-900">{pt.name}</p>
+                              <p className="font-mono text-slate-500 text-[11px]">{pt.icNumber}</p>
+                            </td>
+                            <td className="p-3 text-slate-700 font-medium">{pt.age || estimateAgeFromIC(pt.icNumber) || '-'} • <span className="font-bold">{pt.ward || '-'}</span></td>
+                            <td className="p-3">
+                              <p className="font-bold text-slate-800">{pt.parity || '-'}</p>
+                              <p className="text-teal-700 text-[11px] font-semibold">POG: {pt.pog || 'N/A'}</p>
+                            </td>
+                            <td className="p-3 font-extrabold text-slate-900">{pt.opType === 'Other' ? pt.customOpType : pt.opType}</td>
+                            <td className="p-3 font-bold text-rose-700">{pt.bloodRequirement || 'GSH Standby'}</td>
+                            <td className="p-3 text-slate-700 font-medium">{pt.surgeon || '-'}</td>
+                            <td className="p-3 text-right space-x-1">
+                              <button onClick={() => handleOpenEditPatientModal(pt)} className="p-1.5 rounded text-slate-500 hover:text-teal-600 cursor-pointer"><i className="fa-solid fa-pen-to-square"></i></button>
+                              <button onClick={() => { setPatientToDelete(pt); setIsDeleteConfirmOpen(true); }} className="p-1.5 rounded text-slate-500 hover:text-rose-600 cursor-pointer"><i className="fa-solid fa-trash-can"></i></button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'print' && (
+              <div className="space-y-4">
+                <div className="bg-white rounded-3xl p-5 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 print-hidden">
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                      <i className="fa-solid fa-print text-teal-600"></i>
+                      <span>OTM Elective Surgery Schedule — Print Settings</span>
+                    </h3>
+                    <p className="text-xs text-slate-500">Selected Date: <strong>{formatDateDisplay(selectedDate)}</strong> ({getDayName(selectedDate)})</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                      <span className="text-xs font-bold text-slate-600">Date:</span>
+                      <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer" />
+                    </div>
+                    <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 min-w-[280px]">
+                      <span className="text-xs font-bold text-slate-600 whitespace-nowrap">Specialist / MO:</span>
+                      <input
+                        type="text"
+                        value={printSurgeonTeam}
+                        onChange={(e) => setPrintSurgeonTeam(e.target.value)}
+                        placeholder="Surgeon / Medical Officer names..."
+                        className="w-full bg-white px-2 py-0.5 rounded text-xs text-slate-800 font-medium border border-slate-200 focus:outline-none focus:ring-1 focus:ring-teal-400"
+                      />
+                    </div>
+                    <button onClick={() => window.print()} className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition cursor-pointer">
+                      <i className="fa-solid fa-print"></i>
+                      <span>Print Schedule</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Printable Paper Document */}
+                <div className="bg-white rounded-2xl p-8 border border-slate-300 shadow-sm print:border-none print:shadow-none print:p-0 space-y-5">
+                  <div className="text-center pb-4 border-b-2 border-slate-800 space-y-2">
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="w-16 h-16 flex-shrink-0">
+                        <HospitalMelakaLogo
+                          className="w-full h-full"
+                          customSrc={customLogo}
+                          onUpload={triggerLogoFileInput}
+                        />
+                      </div>
+                      <div className="text-left">
+                        <h1 className="text-2xl font-black uppercase tracking-wider text-slate-950 font-serif leading-tight">Hospital Melaka</h1>
+                        <p className="text-xs font-bold text-purple-950 uppercase tracking-widest">Jabatan Obstetrik &amp; Ginekologi</p>
+                        <h2 className="text-sm font-extrabold uppercase tracking-wide text-slate-850 mt-0.5">OTM Elective Surgery Schedule</h2>
+                      </div>
+                    </div>
+                    <div className="pt-2 flex flex-wrap items-center justify-between text-xs font-semibold text-slate-800 border-t border-slate-200 mt-2 px-2">
+                      <div className="flex items-center gap-3">
+                        <span><strong>Date:</strong> {formatDateDisplay(selectedDate)}</span>
+                        <span>•</span>
+                        <span><strong>Day:</strong> {getDayName(selectedDate)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1 sm:mt-0">
+                        <span className="text-slate-600 font-bold">Surgeon / Medical Officer:</span>
+                        <span className="font-extrabold text-slate-900 bg-slate-100 px-2 py-0.5 rounded print:bg-transparent print:p-0">{printSurgeonTeam}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedDatePatients.length === 0 ? (
+                    <div className="py-12 text-center text-slate-400 text-xs">No elective surgeries scheduled on {formatDateDisplay(selectedDate)}.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs text-left border-collapse border border-slate-800">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-950 font-extrabold border-b-2 border-slate-800">
+                            <th className="p-2 border border-slate-800 w-10 text-center">No.</th>
+                            <th className="p-2.5 border border-slate-800 min-w-[140px]">Name</th>
+                            <th className="p-2.5 border border-slate-800 min-w-[110px]">IC No.</th>
+                            <th className="p-2 border border-slate-800 text-center w-16">Age</th>
+                            <th className="p-2 border border-slate-800 text-center w-20">Ward</th>
+                            <th className="p-2.5 border border-slate-800 min-w-[180px]">Parity, Gestation & Antenatal Issues</th>
+                            <th className="p-2.5 border border-slate-800 min-w-[130px]">Procedure</th>
+                            <th className="p-2.5 border border-slate-800 min-w-[120px]">Blood Requirement</th>
+                            <th className="p-2 border border-slate-800 print-hidden text-center w-20">Order</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                          {selectedDatePatients.map((caseItem, idx) => (
+                            <tr key={caseItem.id} className="border-b border-slate-800 hover:bg-slate-50">
+                              <td className="p-2 border border-slate-800 text-center font-bold text-xs">{idx + 1}</td>
+                              <td className="p-2.5 border border-slate-800 font-extrabold text-slate-900 leading-snug">{caseItem.name}</td>
+                              <td className="p-2.5 border border-slate-800 font-mono text-[11px] text-slate-900 whitespace-nowrap">{caseItem.icNumber}</td>
+                              <td className="p-2 border border-slate-800 text-center font-semibold text-slate-800 whitespace-nowrap">{caseItem.age || estimateAgeFromIC(caseItem.icNumber) || '-'}</td>
+                              <td className="p-2 border border-slate-800 text-center font-bold text-slate-900 whitespace-nowrap">{caseItem.ward || 'Ward 2B'}</td>
+                              <td className="p-2.5 border border-slate-800 text-[11px] leading-tight space-y-1">
+                                <div><span className="font-bold text-slate-950">{caseItem.parity || '-'}</span> <span className="mx-1">•</span> <span className="font-semibold text-teal-900">POG: {caseItem.pog || 'N/A'}</span></div>
+                                {caseItem.antenatalIssues && caseItem.antenatalIssues.length > 0 ? (
+                                  <ul className="list-disc pl-3.5 space-y-0.5 text-[10px] text-slate-800 font-medium">
+                                    {caseItem.antenatalIssues.map((issue, i) => <li key={i}>{issue}</li>)}
+                                  </ul>
+                                ) : <div className="text-[10px] text-slate-500 italic">No complications</div>}
+                              </td>
+                              <td className="p-2.5 border border-slate-800 font-extrabold text-slate-900 text-xs">{caseItem.opType === 'Other' ? caseItem.customOpType : caseItem.opType}</td>
+                              <td className="p-2.5 border border-slate-800 font-bold text-slate-900 text-xs">{caseItem.bloodRequirement || 'GSH Standby'}</td>
+                              <td className="p-2 border border-slate-800 print-hidden text-center">
+                                <div className="flex items-center justify-center space-x-1">
+                                  <button onClick={() => movePatientSequence(caseItem.id, 'up')} disabled={idx === 0} className="p-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 cursor-pointer" title="Move Up">
+                                    <i className="fa-solid fa-arrow-up text-xs"></i>
+                                  </button>
+                                  <button onClick={() => movePatientSequence(caseItem.id, 'down')} disabled={idx === selectedDatePatients.length - 1} className="p-1 rounded bg-slate-100 hover:bg-slate-200 disabled:opacity-30 cursor-pointer" title="Move Down">
+                                    <i className="fa-solid fa-arrow-down text-xs"></i>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-12 pt-8 text-xs font-semibold text-center text-slate-800">
+                    <div className="border-t border-slate-600 pt-2">
+                      <p className="font-bold">Prepared By:</p>
+                      <p className="mt-1 text-slate-700">{currentUser.name}</p>
+                      <p className="text-[10px] text-slate-500 uppercase">{currentUser.role === 'master' ? 'Specialist / Master Admin' : 'Medical Officer'}</p>
+                    </div>
+                    <div className="border-t border-slate-600 pt-2">
+                      <p className="font-bold">Verified By Specialist:</p>
+                      <p className="mt-1 text-slate-700">{printSurgeonTeam}</p>
+                      <p className="text-[10px] text-slate-500">Department of Obstetrics & Gynaecology, Hospital Melaka</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'audit' && (
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900">Audit Trail & Activity Log</h2>
+                    <p className="text-xs text-slate-500">Comprehensive audit tracking of all bookings, modifications, and date locks.</p>
+                  </div>
+                  <span className="text-xs font-bold text-slate-400">{auditLogs.length} Records Logged</span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-700 font-extrabold uppercase text-[10px] border-b">
+                        <th className="p-3">Timestamp</th><th className="p-3">User & Role</th><th className="p-3">Action</th><th className="p-3">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {auditLogs.map(log => (
+                        <tr key={log.id} className="hover:bg-slate-50">
+                          <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{log.timestamp}</td>
+                          <td className="p-3">
+                            <span className="font-extrabold text-slate-900 block">{log.user}</span>
+                            <span className={`text-[10px] font-bold uppercase ${log.role === 'master' ? 'text-teal-700' : 'text-indigo-700'}`}>{log.role}</span>
+                          </td>
+                          <td className="p-3"><span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-800">{log.action}</span></td>
+                          <td className="p-3 text-slate-700 font-medium">{log.details}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </main>
+
+          {isPatientModalOpen && (
+            <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200 max-h-[90vh] overflow-y-auto space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-9 h-9 flex-shrink-0 flex items-center justify-center">
+                      <HospitalMelakaLogo
+                        className="w-full h-full"
+                        customSrc={customLogo}
+                        onUpload={triggerLogoFileInput}
+                      />
+                    </div>
+                    <h3 className="text-base font-extrabold text-slate-900">{editingPatient ? 'Update Patient Information' : 'Schedule New Elective Patient'}</h3>
+                  </div>
+                  <button onClick={() => setIsPatientModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
+                    <i className="fa-solid fa-xmark text-lg"></i>
+                  </button>
+                </div>
+
+                <form onSubmit={handleSavePatient} className="space-y-4 text-xs">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Hospital Location</label>
+                      <select value={patientForm.hospital} onChange={(e) => setPatientForm({ ...patientForm, hospital: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold">
+                        <option value="OTM">OTM (Hospital Melaka)</option>
+                        <option value="GHM">GHM</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Scheduled Surgery Date</label>
+                      <input type="date" value={patientForm.opDate || selectedDate} onChange={(e) => setPatientForm({ ...patientForm, opDate: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" required />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-3">
+                    <div className="col-span-12 sm:col-span-5">
+                      <label className="font-bold text-slate-700 block mb-1">Patient Full Name</label>
+                      <input type="text" placeholder="e.g. Siti Nurhaliza Binti Tarudin" value={patientForm.name} onChange={(e) => setPatientForm({ ...patientForm, name: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" required />
+                    </div>
+                    <div className="col-span-12 sm:col-span-3">
+                      <label className="font-bold text-slate-700 block mb-1">IC / Passport Number</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 920815-10-5432"
+                        value={patientForm.icNumber}
+                        onChange={(e) => {
+                          const newIC = e.target.value;
+                          const estimated = estimateAgeFromIC(newIC);
+                          setPatientForm(prev => ({ ...prev, icNumber: newIC, age: prev.age || estimated }));
+                        }}
+                        className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs"
+                        required
+                      />
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label className="font-bold text-slate-700 block mb-1">Age</label>
+                      <input type="text" placeholder="e.g. 34 yrs" value={patientForm.age} onChange={(e) => setPatientForm({ ...patientForm, age: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" />
+                    </div>
+                    <div className="col-span-6 sm:col-span-2">
+                      <label className="font-bold text-slate-700 block mb-1">Ward</label>
+                      <input type="text" placeholder="e.g. Ward 2B" value={patientForm.ward} onChange={(e) => setPatientForm({ ...patientForm, ward: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 bg-teal-50/60 p-3 rounded-2xl border border-teal-100">
+                    <div>
+                      <label className="font-bold text-teal-900 block mb-1">LMP (Last Period)</label>
+                      <input type="date" value={patientForm.lmp} onChange={(e) => setPatientForm({ ...patientForm, lmp: e.target.value })} className="w-full bg-white border border-teal-200 rounded-xl px-2 py-1.5 text-xs" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-teal-900 block mb-1">EDD (Manual)</label>
+                      <input type="date" value={patientForm.edd} onChange={(e) => setPatientForm({ ...patientForm, edd: e.target.value })} className="w-full bg-white border border-teal-200 rounded-xl px-2 py-1.5 text-xs font-semibold text-teal-900" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-teal-900 block mb-1">POG (Auto)</label>
+                      <input type="text" value={calculatePOG(patientForm.lmp, patientForm.opDate || selectedDate)} readOnly placeholder="Weeks + Days" className="w-full bg-teal-100/70 border border-teal-200 rounded-xl px-2 py-1.5 text-xs font-bold text-teal-900" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-teal-900 block mb-1">Parity</label>
+                      <input type="text" placeholder="e.g. G2P1" value={patientForm.parity} onChange={(e) => setPatientForm({ ...patientForm, parity: e.target.value })} className="w-full bg-white border border-teal-200 rounded-xl px-2 py-1.5 text-xs font-bold" />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Primary Phone</label>
+                      <input type="tel" placeholder="+6012-3456789" value={patientForm.phone1} onChange={(e) => setPatientForm({ ...patientForm, phone1: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Secondary / Next of Kin</label>
+                      <input type="tel" placeholder="+6019-8765432" value={patientForm.phone2} onChange={(e) => setPatientForm({ ...patientForm, phone2: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1.5">Antenatal Issues / Complications</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {[
+                        'Gestational Diabetes (GDM)', 'Pre-eclampsia (PIH)', 'Previous Scar x1', 'Previous Scar x2',
+                        'Placenta Previa', 'Breech Presentation', 'Twin Gestation', 'Oligohydramnios'
+                      ].map(issue => {
+                        const isChecked = patientForm.antenatalIssues?.includes(issue);
+                        return (
+                          <label key={issue} className={`flex items-center gap-2 p-2 rounded-xl border text-[11px] cursor-pointer transition ${isChecked ? 'bg-rose-50 border-rose-300 text-rose-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                const list = patientForm.antenatalIssues ? [...patientForm.antenatalIssues] : [];
+                                if (e.target.checked) list.push(issue);
+                                else {
+                                  const idx = list.indexOf(issue);
+                                  if (idx > -1) list.splice(idx, 1);
+                                }
+                                setPatientForm({ ...patientForm, antenatalIssues: list });
+                              }}
+                              className="rounded text-rose-600"
+                            />
+                            <span>{issue}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <input type="text" placeholder="Other antenatal issue (optional)..." value={patientForm.customAntenatalIssue} onChange={(e) => setPatientForm({ ...patientForm, customAntenatalIssue: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 text-xs mt-2" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Operation / Procedure Type</label>
+                      <select value={patientForm.opType} onChange={(e) => setPatientForm({ ...patientForm, opType: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-800">
+                        <option value="LSCS">LSCS</option>
+                        <option value="LSCS KIV Hysterectomy">LSCS KIV Hysterectomy</option>
+                        <option value="LSCS+BTL">LSCS+BTL</option>
+                        <option value="Other">Other Procedure</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Blood Requirement</label>
+                      <input type="text" placeholder="e.g. GSH Standby / GXM 2 Pints PC" value={patientForm.bloodRequirement} onChange={(e) => setPatientForm({ ...patientForm, bloodRequirement: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold" />
+                    </div>
+                  </div>
+
+                  {patientForm.opType === 'Other' && (
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Specify Other Procedure</label>
+                      <input type="text" placeholder="e.g. Exploratory Laparotomy" value={patientForm.customOpType} onChange={(e) => setPatientForm({ ...patientForm, customOpType: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" required />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Case Booked By</label>
+                      <input type="text" placeholder="e.g. Dr. Sarah (MO)" value={patientForm.surgeon} onChange={(e) => setPatientForm({ ...patientForm, surgeon: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" />
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">Anesthesia</label>
+                      <select value={patientForm.anesthesia} onChange={(e) => setPatientForm({ ...patientForm, anesthesia: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs">
+                        <option value="Spinal Anesthesia">Spinal Anesthesia</option>
+                        <option value="General Anesthesia (GA)">General Anesthesia (GA)</option>
+                        <option value="Epidural Anesthesia">Epidural Anesthesia</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1">OT Room</label>
+                      <input type="text" value={patientForm.otRoom} onChange={(e) => setPatientForm({ ...patientForm, otRoom: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Additional Remarks</label>
+                    <input type="text" placeholder="e.g. NPO midnight, standby ICU bed..." value={patientForm.remarks} onChange={(e) => setPatientForm({ ...patientForm, remarks: e.target.value })} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" />
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                    <button type="button" onClick={() => setIsPatientModalOpen(false)} className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer">Cancel</button>
+                    <button type="submit" className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-md shadow-teal-500/20 cursor-pointer">Save Patient Record</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {isBlockModalOpen && (
+            <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
+                      <i className="fa-solid fa-lock"></i>
+                    </div>
+                    <h3 className="text-base font-extrabold text-slate-900">{isCurrentSelectedDateBlocked ? 'Unlock Surgery Date' : 'Lock Surgery Date'}</h3>
+                  </div>
+                  <button onClick={() => setIsBlockModalOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><i className="fa-solid fa-xmark"></i></button>
+                </div>
+                <form onSubmit={handleToggleBlockDate} className="space-y-4 text-xs">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Selected Date</label>
+                    <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold" />
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Hospital Facility</label>
+                    <select value={blockHospital} onChange={(e) => setBlockHospital(e.target.value)} className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold">
+                      <option value="OTM">OTM Only</option>
+                      <option value="GHM">GHM Only</option>
+                      <option value="ALL">All Hospitals (OTM & GHM)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">Lock Reason</label>
+                    <input type="text" value={blockReason} onChange={(e) => setBlockReason(e.target.value)} placeholder="e.g. OT Maintenance / Public Holiday" className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs" required />
+                  </div>
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                    <button type="button" onClick={() => setIsBlockModalOpen(false)} className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer">Cancel</button>
+                    <button type="submit" className={`px-5 py-2 rounded-xl text-white font-bold shadow-md cursor-pointer ${isCurrentSelectedDateBlocked ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
+                      {isCurrentSelectedDateBlocked ? 'Unlock Now' : 'Confirm Lock Date'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {isDeleteConfirmOpen && patientToDelete && (
+            <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 border border-slate-200 space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto text-xl">
+                  <i className="fa-solid fa-trash-can"></i>
+                </div>
+                <div className="text-center space-y-1">
+                  <h3 className="text-base font-extrabold text-slate-900">Confirm Deletion</h3>
+                  <p className="text-xs text-slate-500">Are you sure you want to delete the record for <strong>{patientToDelete.name}</strong> ({patientToDelete.opType})?</p>
+                </div>
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <button onClick={() => { setIsDeleteConfirmOpen(false); setPatientToDelete(null); }} className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold cursor-pointer">Cancel</button>
+                  <button onClick={confirmDeletePatient} className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/20 cursor-pointer">Delete Record</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const rootElement = document.getElementById('root');
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(<App />);
+  </script>
+</body>
+</html>
